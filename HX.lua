@@ -4,15 +4,150 @@ if not isfolder(dir) then makefolder(dir) end
 local autoExecDir = dir.."/AutoExec"
 if not isfolder(autoExecDir) then makefolder(autoExecDir) end
 
+local baseUrl = "https://raw.githubusercontent.com/OneCreatorX/X/refs/heads/main/Iconos/"
+local saveDir = "assets/"
+if not isfolder(saveDir) then makefolder(saveDir) end
+
+local ReadyIcons = {
+    LGO = "logo.png", CLS = "close.png", EXE = "execute.png", SAV = "save.png",
+    CLR = "clear.png", REF = "refresh.png", CON = "console.png", SET = "settings.png",
+    SCH = "search.png", FLD = "folder.png", DEL = "delete.png", PRT = "particle.png"
+}
+
+local function showLoadingScreen()
+    local CG = cloneref(gethui())
+    local loadingGui = Instance.new("ScreenGui", CG)
+    loadingGui.Name = "HeatherXLoading"
+    
+    local background = Instance.new("Frame", loadingGui)
+    background.Size = UDim2.new(1, 0, 1, 0)
+    background.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
+    background.Transparency = 1
+    
+    local container = Instance.new("Frame", background)
+    container.Size = UDim2.new(0, 300, 0, 150)
+    container.Position = UDim2.new(0.5, -150, 0.5, -75)
+    container.BackgroundColor3 = Color3.fromRGB(35, 25, 50)
+    container.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner", container)
+    corner.CornerRadius = UDim.new(0, 10)
+    
+    local title = Instance.new("TextLabel", container)
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "HeatherX"
+    title.TextColor3 = Color3.fromRGB(240, 150, 210)
+    title.TextSize = 24
+    title.Font = Enum.Font.GothamBold
+    
+    local status = Instance.new("TextLabel", container)
+    status.Size = UDim2.new(1, 0, 0, 30)
+    status.Position = UDim2.new(0, 0, 0, 60)
+    status.BackgroundTransparency = 1
+    status.Text = "Downloading assets..."
+    status.TextColor3 = Color3.fromRGB(255, 255, 255)
+    status.TextSize = 16
+    status.Font = Enum.Font.Gotham
+    
+    local progress = Instance.new("TextLabel", container)
+    progress.Size = UDim2.new(1, 0, 0, 20)
+    progress.Position = UDim2.new(0, 0, 0, 90)
+    progress.BackgroundTransparency = 1
+    progress.Text = "0/" .. #ReadyIcons
+    progress.TextColor3 = Color3.fromRGB(255, 255, 255)
+    progress.TextSize = 14
+    progress.Font = Enum.Font.Gotham
+    
+    local bar = Instance.new("Frame", container)
+    bar.Size = UDim2.new(0.8, 0, 0, 10)
+    bar.Position = UDim2.new(0.1, 0, 0, 120)
+    bar.BackgroundColor3 = Color3.fromRGB(50, 40, 65)
+    bar.BorderSizePixel = 0
+    
+    local barCorner = Instance.new("UICorner", bar)
+    barCorner.CornerRadius = UDim.new(0, 5)
+    
+    local fill = Instance.new("Frame", bar)
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(240, 150, 210)
+    fill.BorderSizePixel = 0
+    
+    local fillCorner = Instance.new("UICorner", fill)
+    fillCorner.CornerRadius = UDim.new(0, 5)
+    
+    return loadingGui, progress, fill
+end
+
+local function loadImageFromUrl(url, fullPath)
+    if not isfile(fullPath) then
+        local content = game:HttpGet(url)
+        writefile(fullPath, content)
+    end
+    return getsynasset(fullPath)
+end
+
+local function loadAllIcons()
+    local needsDownload = false
+    for _, file in pairs(ReadyIcons) do
+        if not isfile(saveDir .. file) then
+            needsDownload = true
+            break
+        end
+    end
+    
+    local LoadedImages = {}
+    
+    if needsDownload then
+        local loadingGui, progress, fill = showLoadingScreen()
+        local count, total = 0, 0
+        
+        for _ in pairs(ReadyIcons) do total = total + 1 end
+        
+        for key, file in pairs(ReadyIcons) do
+            local fullUrl = baseUrl .. file
+            local filePath = saveDir .. file
+            
+            local success, asset = pcall(function()
+                return loadImageFromUrl(fullUrl, filePath)
+            end)
+            
+            if success then LoadedImages[key] = asset end
+            
+            count = count + 1
+            progress.Text = count .. "/" .. total
+            fill.Size = UDim2.new(count/total, 0, 1, 0)
+            task.wait(0.1)
+        end
+        
+        task.wait(0.5)
+        loadingGui:Destroy()
+    else
+        for key, file in pairs(ReadyIcons) do
+            local filePath = saveDir .. file
+            local success, asset = pcall(getsynasset, filePath)
+            
+            if success then
+                LoadedImages[key] = asset
+            else
+                pcall(function()
+                    LoadedImages[key] = loadImageFromUrl(baseUrl .. file, filePath)
+                end)
+            end
+        end
+    end
+    
+    return LoadedImages
+end
+
 local function runAutoExecuteScripts()
     local executed = 0
     for _, file in ipairs(listfiles(autoExecDir)) do
         if file:sub(-4) == ".lua" then
             local success, content = pcall(readfile, file)
             if success then
-                pcall(function()
-                    loadstring(content)()
-                end)
+                pcall(function() loadstring(content)() end)
                 executed = executed + 1
             end
         end
@@ -21,19 +156,20 @@ local function runAutoExecuteScripts()
 end
 
 local autoExecutedCount = runAutoExecuteScripts()
+local LoadedImages = loadAllIcons()
 
 local CG, TS, UIS, HttpService = cloneref(gethui()), game:GetService("TweenService"), game:GetService("UserInputService"), game:GetService("HttpService")
 
 local C = {
-BG = Color3.fromRGB(20, 10, 30), SEC = Color3.fromRGB(35, 25, 50), 
-PANEL = Color3.fromRGB(50, 40, 65), ACC = Color3.fromRGB(240, 150, 210),
-ACCL = Color3.fromRGB(255, 170, 230), ACCD = Color3.fromRGB(220, 130, 190),
-TXT = Color3.fromRGB(255, 255, 255), TXT2 = Color3.fromRGB(230, 230, 240),
-SUC = Color3.fromRGB(150, 220, 170), WARN = Color3.fromRGB(250, 190, 150),
-ERR = Color3.fromRGB(255, 140, 160), LAVENDER = Color3.fromRGB(190, 170, 240),
-PINK = Color3.fromRGB(255, 170, 210), BORDER = Color3.fromRGB(80, 60, 100),
-CODE_BG = Color3.fromRGB(15, 5, 25), ERROR_LINE = Color3.fromRGB(75, 25, 35),
-AUTO_EXEC = Color3.fromRGB(140, 190, 255), SHADOW = Color3.fromRGB(0, 0, 0)
+    BG = Color3.fromRGB(20, 10, 30), SEC = Color3.fromRGB(35, 25, 50), 
+    PANEL = Color3.fromRGB(50, 40, 65), ACC = Color3.fromRGB(240, 150, 210),
+    ACCL = Color3.fromRGB(255, 170, 230), ACCD = Color3.fromRGB(220, 130, 190),
+    TXT = Color3.fromRGB(255, 255, 255), TXT2 = Color3.fromRGB(230, 230, 240),
+    SUC = Color3.fromRGB(150, 220, 170), WARN = Color3.fromRGB(250, 190, 150),
+    ERR = Color3.fromRGB(255, 140, 160), LAVENDER = Color3.fromRGB(190, 170, 240),
+    PINK = Color3.fromRGB(255, 170, 210), BORDER = Color3.fromRGB(80, 60, 100),
+    CODE_BG = Color3.fromRGB(15, 5, 25), AUTO_EXEC = Color3.fromRGB(140, 190, 255), 
+    SHADOW = Color3.fromRGB(0, 0, 0)
 }
 
 local function cEl(t, p, props)
@@ -113,20 +249,16 @@ local function cIBtn(p, icon, pos, size, color, cb)
     local btn = cEl("ImageButton", p, {
         Size = size or UDim2.new(0, 32, 0, 32), Position = pos,
         BackgroundColor3 = color or C.PANEL, Image = icon,
-        ScaleType = Enum.ScaleType.Fit, ImageColor3 = C.TXT, AutoButtonColor = false
+        ScaleType = Enum.ScaleType.Fit, ImageColor3 = C.TXT, AutoButtonColor = false,
+        BackgroundTransparency = 1
     })
     
     btn.MouseEnter:Connect(function()
-        TS:Create(btn, TweenInfo.new(0.2), {
-            BackgroundColor3 = color and color:Lerp(Color3.new(1, 1, 1), 0.15) or C.SEC,
-            ImageColor3 = C.LAVENDER
-        }):Play()
+        TS:Create(btn, TweenInfo.new(0.2), {ImageColor3 = C.LAVENDER}):Play()
     end)
     
     btn.MouseLeave:Connect(function()
-        TS:Create(btn, TweenInfo.new(0.2), {
-            BackgroundColor3 = color or C.PANEL, ImageColor3 = C.TXT
-        }):Play()
+        TS:Create(btn, TweenInfo.new(0.2), {ImageColor3 = C.TXT}):Play()
     end)
     
     if cb then btn.MouseButton1Click:Connect(cb) end
@@ -177,13 +309,24 @@ local function showNotif(title, msg, type)
         TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 101
     })
     
-    local icon = type == "success" and "rbxassetid://6031075931" or 
-                 type == "warning" and "rbxassetid://6031071053" or 
-                 type == "error" and "rbxassetid://6031071057" or "rbxassetid://116872248658338"
+    local iconImage
+    if type == "success" and LoadedImages.EXE then
+        iconImage = LoadedImages.LGO
+    elseif type == "warning" and LoadedImages.REF then
+        iconImage = LoadedImages.REF
+    elseif type == "error" and LoadedImages.CLS then
+        iconImage = LoadedImages.CLS
+    elseif LoadedImages.LGO then
+        iconImage = LoadedImages.LGO
+    else
+        iconImage = type == "success" and "rbxassetid://6031075931" or 
+                   type == "warning" and "rbxassetid://6031071053" or 
+                   type == "error" and "rbxassetid://6031071057" or "rbxassetid://116872248658338"
+    end
     
     cEl("ImageLabel", n, {
         Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(1, -36, 0, 25),
-        BackgroundTransparency = 1, Image = icon, ImageColor3 = color, ZIndex = 101
+        BackgroundTransparency = 1, Image = iconImage, ImageColor3 = color, ZIndex = 101
     })
     
     TS:Create(n, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
@@ -204,7 +347,8 @@ end
 local function createFeather(p, size, pos)
     local f = cEl("ImageLabel", p, {
         Size = UDim2.new(0, size, 0, size * 2), Position = pos,
-        BackgroundTransparency = 1, Image = "rbxassetid://138394208142945",
+        BackgroundTransparency = 1, 
+        Image = LoadedImages.PRT or "rbxassetid://138394208142945",
         ImageColor3 = math.random() > 0.5 and C.LAVENDER or C.PINK,
         ImageTransparency = 0.7, Rotation = math.random(-20, 20), ZIndex = 1
     })
@@ -279,9 +423,7 @@ local function setAutoExecute(scriptName, content, enabled)
     if enabled then
         writefile(fullPath, content)
     else
-        if isfile(fullPath) then
-            delfile(fullPath)
-        end
+        if isfile(fullPath) then delfile(fullPath) end
     end
 end
 
@@ -323,9 +465,11 @@ local function showEd()
     
     local ls = l and 22 * sf or 26 * sf
     
+    local logoImage = LoadedImages.LGO or "rbxassetid://116872248658338"
+    
     cEl("ImageLabel", tb, {
         Size = UDim2.new(0, ls, 0, ls), Position = UDim2.new(0, 10 * sf, 0.5, -ls/2),
-        BackgroundTransparency = 1, Image = "rbxassetid://116872248658338",
+        BackgroundTransparency = 1, Image = logoImage,
         ImageColor3 = C.PINK, ZIndex = 5
     })
     
@@ -356,7 +500,9 @@ local function showEd()
     
     local cbs = l and 20 * sf or 24 * sf
     
-    cIBtn(tb, "rbxassetid://6035047391", 
+    local closeIcon = LoadedImages.CLS or "rbxassetid://6035047391"
+    
+    cIBtn(tb, closeIcon, 
         UDim2.new(1, -cbs - 10 * sf, 0.5, -cbs/2), 
         UDim2.new(0, cbs, 0, cbs), C.PANEL, 
         function() sg:Destroy() end
@@ -421,46 +567,20 @@ local function showEd()
     pad.PaddingRight = UDim.new(0, 12)
     pad.PaddingBottom = UDim.new(0, 10)
     
-    local errorHighlight = cEl("Frame", ce, {
-        Size = UDim2.new(1, 0, 0, lineHeight), 
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = C.ERROR_LINE, 
-        BackgroundTransparency = 0.6,
-        Visible = false, ZIndex = 2
-    })
-    
-    if errorHighlight:FindFirstChildOfClass("UICorner") then 
-        errorHighlight:FindFirstChildOfClass("UICorner"):Destroy() 
-    end
-    
     local keyboardVisible = false
     UIS.TextBoxFocused:Connect(function(textbox)
         if textbox == ctb and UIS.TouchEnabled and not UIS.KeyboardEnabled then
             keyboardVisible = true
-            local adjustSize = UDim2.new(1, 0, 1, -(hh + nh + fh + 215))
-            contentPanel.Size = adjustSize
+            contentPanel.Size = UDim2.new(1, 0, 1, -(hh + nh + fh + 215))
         end
     end)
     
     UIS.TextBoxFocusReleased:Connect(function(textbox)
         if textbox == ctb and keyboardVisible then
             keyboardVisible = false
-            local normalSize = UDim2.new(1, 0, 1, -(hh + nh + fh))
-            contentPanel.Size = normalSize
+            contentPanel.Size = UDim2.new(1, 0, 1, -(hh + nh + fh))
         end
     end)
-    
-    local function highlightErrorLine(lineNum)
-        if not lineNum or lineNum < 1 then
-            errorHighlight.Visible = false
-            return
-        end
-        
-        errorHighlight.Position = UDim2.new(0, 0, 0, (lineNum - 1) * lineHeight)
-        errorHighlight.Visible = true
-        
-        ce.CanvasPosition = Vector2.new(0, math.max(0, (lineNum - 4) * lineHeight))
-    end
     
     local function updateLines()
         local lines = 1
@@ -474,9 +594,7 @@ local function showEd()
         ls.CanvasSize = UDim2.new(0, 0, 0, lineHeight * lines)
         
         for _, child in ipairs(ls:GetChildren()) do
-            if child:IsA("TextLabel") then
-                child:Destroy()
-            end
+            if child:IsA("TextLabel") then child:Destroy() end
         end
         
         for i = 1, lines do
@@ -552,10 +670,10 @@ local function showEd()
         Text = "", TextSize = l and 13 * sf or 15 * sf, ClearTextOnFocus = false
     })
     
-    local sbtn = cBtn(sb, "Search", 
-        UDim2.new(1, -80 * sf, 0, 4 * sf), 
-        UDim2.new(0, 75 * sf, 1, -8 * sf), C.ACC
-    )
+    local searchBtnSize = UDim2.new(0, 95 * sf, 0, 100 * sf)
+    local searchBtn = cIBtn(sb, LoadedImages.SCH or "rbxassetid://6031097225", 
+        UDim2.new(1, -85 * sf, 0.5, -50 * sf), 
+        searchBtnSize, C.ACC)
     
     local rf = cEl("ScrollingFrame", cp, {
         Size = UDim2.new(1, 0, 1, -sbh), Position = UDim2.new(0, 0, 0, sbh),
@@ -604,9 +722,7 @@ local function showEd()
         local is = l and 65 * sf or 75 * sf
         
         local dir = "scriptblox_images"
-        if not isfolder(dir) then
-            makefolder(dir)
-        end
+        if not isfolder(dir) then makefolder(dir) end
         
         local imageUrl = ""
         if script.game and script.game.imageUrl and script.game.imageUrl ~= "" then
@@ -626,23 +742,18 @@ local function showEd()
                 local fileName = dir .. "/" .. imageUrl:match("[^/]+$")
         
                 if not isfile(fileName) then
-                    local ok, res = pcall(function()
-                        return game:HttpGet(imageUrl)
-                    end)
-                    if ok and res then
-                        writefile(fileName, res)
-                    else
-                        fileName = nil
-                    end
+                    local ok, res = pcall(function() return game:HttpGet(imageUrl) end)
+                    if ok and res then writefile(fileName, res)
+                    else fileName = nil end
                 end
         
                 if fileName and isfile(fileName) then
                     gi.Image = getsynasset(fileName)
                 else
-                    gi.Image = "rbxassetid://116872248658338"
+                    gi.Image = LoadedImages.LGO or "rbxassetid://116872248658338"
                 end
             else
-                gi.Image = "rbxassetid://116872248658338"
+                gi.Image = LoadedImages.LGO or "rbxassetid://116872248658338"
             end
         end)
         
@@ -673,7 +784,7 @@ local function showEd()
         if script.verified then
             cEl("ImageLabel", si, {
                 Size = UDim2.new(0, 18 * sf, 0, 18 * sf), Position = UDim2.new(1, -95 * sf, 0, 6 * sf),
-                BackgroundTransparency = 1, Image = "rbxassetid://6031075931", ImageColor3 = C.SUC
+                BackgroundTransparency = 1, Image = LoadedImages.EXE or "rbxassetid://6031075931", ImageColor3 = C.SUC
             })
         end
         
@@ -701,7 +812,7 @@ local function showEd()
         return si
     end
     
-    sbtn.MouseButton1Click:Connect(function()
+    searchBtn.MouseButton1Click:Connect(function()
         local q = si.Text
         if q and q:len() > 0 then
             clearResults()
@@ -728,7 +839,7 @@ local function showEd()
     end)
     
     si.FocusLost:Connect(function(ep)
-        if ep then sbtn.MouseButton1Click:Fire() end
+        if ep then searchBtn.MouseButton1Click:Fire() end
     end)
     
     local function createUtilItem(name, desc, cb, icon)
@@ -744,7 +855,7 @@ local function showEd()
         
         cEl("ImageLabel", ui, {
             Size = UDim2.new(0, is, 0, is), Position = UDim2.new(0, 12 * sf, 0.5, -is/2),
-            BackgroundTransparency = 1, Image = icon or "rbxassetid://116872248658338", ImageColor3 = C.LAVENDER
+            BackgroundTransparency = 1, Image = icon or LoadedImages.LGO or "rbxassetid://116872248658338", ImageColor3 = C.LAVENDER
         })
         
         local ns = l and 13 * sf or 15 * sf
@@ -775,12 +886,9 @@ local function showEd()
         return ui
     end
     
-    
     local utils = {
-        {"Infinite Yield", "FE Admin Commands", function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end, "rbxassetid://6034996695"},
-        {"Dex Explorer", "Roblox Explorer", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end, "rbxassetid://6022668883"},
-        {"Owl Hub", "Universal ESP & Aimbot", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CriShoux/OwlHub/master/OwlHub.txt"))() end, "rbxassetid://6034687957"},
-        {"CMD-X", "Admin Command Script", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CMD-X/CMD-X/master/Source", true))() end, "rbxassetid://6034509993"}
+        {"Infinite Yield", "FE Admin Commands", function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end, LoadedImages.SET or "rbxassetid://6034996695"},
+        {"Dex Explorer", "Roblox Explorer", function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end, LoadedImages.FLD or "rbxassetid://6022668883"}
     }
     
     for _, u in ipairs(utils) do
@@ -814,7 +922,7 @@ local function showEd()
         
         local iconImg = cEl("ImageLabel", si, {
             Size = UDim2.new(0, is, 0, is), Position = UDim2.new(0, 12 * sf, 0.5, -is/2),
-            BackgroundTransparency = 1, Image = "rbxassetid://6026568198", ImageColor3 = iconColor
+            BackgroundTransparency = 1, Image = LoadedImages.FLD or "rbxassetid://6026568198", ImageColor3 = iconColor
         })
         
         local ns = l and 13 * sf or 15 * sf
@@ -851,33 +959,47 @@ local function showEd()
         )
         
         local autoExecBtn = cBtn(si, isAutoExec and "Auto ✓" or "Auto", 
-        UDim2.new(1, -(175 * sf), 0.5, -bs/2), 
-        UDim2.new(0, 75 * sf, 0, bs), 
-        isAutoExec and C.AUTO_EXEC or C.SEC
-    )
+            UDim2.new(1, -(175 * sf), 0.5, -bs/2), 
+            UDim2.new(0, 75 * sf, 0, bs), 
+            isAutoExec and C.AUTO_EXEC or C.SEC
+        )
     
-    autoExecBtn.MouseButton1Click:Connect(function()
-        local success, content = pcall(readfile, scriptPath)
-        if success then
-            isAutoExec = not isAutoExec
-            setAutoExecute(fn..".lua", content, isAutoExec)
-            autoExecBtn.Text = isAutoExec and "Auto ✓" or "Auto"
-            autoExecBtn.BackgroundColor3 = isAutoExec and C.AUTO_EXEC or C.SEC
-            iconImg.ImageColor3 = isAutoExec and C.AUTO_EXEC or C.PINK
-    
-            showNotif(
-                isAutoExec and "Auto Execute Enabled" or "Auto Execute Disabled", 
-                fn, 
-                isAutoExec and "success" or "warning"
-            )
-        else
-            showNotif("Error", "Failed to load script", "error")
+        local function refScr()
+            for _, c in ipairs(sp:GetChildren()) do
+                if c:IsA("Frame") then c:Destroy() end
+            end
+            
+            local scripts = {}
+            for _, f in ipairs(listfiles(dir)) do
+                if f:sub(-4) == ".lua" then table.insert(scripts, f) end
+            end
+            
+            for _, p in ipairs(scripts) do
+                createScriptItem(sp, p)
+            end
         end
-    end)
-        
-        cBtn(si, "Delete", 
-            UDim2.new(1, -(90 * sf), 0.5, -bs/2), 
-            UDim2.new(0, 85 * sf, 0, bs), C.ERR, 
+    
+        autoExecBtn.MouseButton1Click:Connect(function()
+            local success, content = pcall(readfile, scriptPath)
+            if success then
+                isAutoExec = not isAutoExec
+                setAutoExecute(fn..".lua", content, isAutoExec)
+                
+                showNotif(
+                    isAutoExec and "Auto Execute Enabled" or "Auto Execute Disabled", 
+                    fn, 
+                    isAutoExec and "success" or "warning"
+                )
+                
+                refScr()
+            else
+                showNotif("Error", "Failed to load script", "error")
+            end
+        end)
+
+        local deleteBtn = cIBtn(si, LoadedImages.DEL or "rbxassetid://6035047391", 
+            UDim2.new(1, -(90 * sf), 0.5, -15 * sf), 
+            UDim2.new(0, 30 * sf, 0, 30 * sf), C.ERR, 
             function()
                 if isAutoExecuteScript(fn..".lua") then
                     setAutoExecute(fn..".lua", "", false)
@@ -890,22 +1012,7 @@ local function showEd()
         
         return si
     end
-    
-    local function refScr()
-        for _, c in ipairs(sp:GetChildren()) do
-            if c:IsA("Frame") then c:Destroy() end
-        end
-        
-        local scripts = {}
-        for _, f in ipairs(listfiles(dir)) do
-            if f:sub(-4) == ".lua" then table.insert(scripts, f) end
-        end
-        
-        for _, p in ipairs(scripts) do
-            createScriptItem(sp, p)
-        end
-    end
-    
+   
     local function showSave()
         local blur = cEl("Frame", sg, {
             Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, 0),
@@ -945,7 +1052,7 @@ local function showEd()
         
         cEl("ImageLabel", st, {
             Size = UDim2.new(0, is, 0, is), Position = UDim2.new(0, 12 * sf, 0.5, -is/2),
-            BackgroundTransparency = 1, Image = "rbxassetid://6026568198",
+            BackgroundTransparency = 1, Image = LoadedImages.SAV or "rbxassetid://6026568198",
             ImageColor3 = C.LAVENDER, ZIndex = 12
         })
         
@@ -968,7 +1075,7 @@ local function showEd()
         
         local checkmark = cEl("ImageLabel", autoExecCheckbox, {
             Size = UDim2.new(0.7, 0, 0.7, 0), Position = UDim2.new(0.15, 0, 0.15, 0),
-            BackgroundTransparency = 1, Image = "rbxassetid://6031094670",
+            BackgroundTransparency = 1, Image = LoadedImages.EXE or "rbxassetid://6031094670",
             ImageColor3 = C.AUTO_EXEC, ZIndex = 13, Visible = autoExecEnabled
         })
         
@@ -1013,7 +1120,7 @@ local function showEd()
             refScr()
         end)
         
-        cIBtn(st, "rbxassetid://6035047391", 
+        local closeBtn = cIBtn(st, LoadedImages.CLS or "rbxassetid://6035047391", 
             UDim2.new(1, -is - 12 * sf, 0.5, -is/2), 
             UDim2.new(0, is, 0, is), C.PANEL, 
             function() blur:Destroy() end
@@ -1047,21 +1154,7 @@ local function showEd()
     
     local is = l and 15 * sf or 18 * sf
     
-    local function createIconBtn(p, txt, size, color, icon, cb)
-        local btn = cBtn(p, txt, nil, size, color, cb)
-        
-        cEl("ImageLabel", btn, {
-            Size = UDim2.new(0, is, 0, is), Position = UDim2.new(0, 10 * sf, 0.5, -is/2),
-            BackgroundTransparency = 1, Image = icon, ImageColor3 = C.TXT
-        })
-        
-        btn.Text = "    " .. txt
-        return btn
-    end
-    
     local function executeScript()
-        errorHighlight.Visible = false
-        
         local success, result = pcall(function() 
             return loadstring(ctb.Text)() 
         end)
@@ -1073,7 +1166,6 @@ local function showEd()
             local lineNum = tonumber(errorMsg:match(":(%d+):"))
             
             if lineNum then
-                highlightErrorLine(lineNum)
                 showNotif("Error", "Error on line " .. lineNum .. ": " .. errorMsg:match(":%d+:%s*(.+)"), "error")
             else
                 showNotif("Error", "Execution failed: " .. errorMsg, "error")
@@ -1081,29 +1173,71 @@ local function showEd()
         end
     end
     
-    createIconBtn(eb, "Execute", UDim2.new(0.33, -4 * sf, 1, -6 * sf), C.ACC, "rbxassetid://6026663699", executeScript)
+    local executeBtn = cIBtn(nil, LoadedImages.EXE or "rbxassetid://6026663699", 
+        UDim2.new(0.5, -15 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 30 * sf, 0, 30 * sf), C.ACC, executeScript)
     
-    createIconBtn(eb, "Clear", UDim2.new(0.33, -4 * sf, 1, -6 * sf), C.WARN, "rbxassetid://6035047391", function()
-        ctb.Text = ""
-        errorHighlight.Visible = false
-        showNotif("Cleared", "Editor cleared", "warning")
-    end)
+    local executeContainer = cEl("Frame", eb, {
+        Size = UDim2.new(0.33, -4 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    executeBtn.Parent = executeContainer
+
+    local saveBtn = cIBtn(nil, LoadedImages.SAV or "rbxassetid://6026568198", 
+        UDim2.new(0.5, -15 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 30 * sf, 0, 30 * sf), C.PINK, showSave)
     
-    createIconBtn(eb, "Save", UDim2.new(0.33, -4 * sf, 1, -6 * sf), C.PINK, "rbxassetid://6026568198", showSave)
+    local saveContainer = cEl("Frame", eb, {
+        Size = UDim2.new(0.33, -4 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    saveBtn.Parent = saveContainer
+
+    local clearBtn = cIBtn(nil, LoadedImages.CLR or "rbxassetid://6035047391", 
+        UDim2.new(0.5, -50 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 80 * sf, 0, 30 * sf), C.WARN, function()
+            ctb.Text = ""
+            showNotif("Cleared", "Editor cleared", "warning")
+        end)
     
-    createIconBtn(sb, "Refresh", UDim2.new(1, -10 * sf, 1, -6 * sf), C.ACC, "rbxassetid://6031097225", function()
-        refScr()
-        showNotif("Refreshed", "Scripts refreshed", "success")
-    end)
+    local clearContainer = cEl("Frame", eb, {
+        Size = UDim2.new(0.33, -4 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    clearBtn.Parent = clearContainer
+
+    local consoleBtn = cIBtn(nil, LoadedImages.CON or "rbxassetid://6031075931", 
+        UDim2.new(0.5, -15 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 30 * sf, 0, 30 * sf), C.LAVENDER, function()
+            openConsole()
+            showNotif("Console", "Developer console opened", "success")
+        end)
     
-    createIconBtn(ub, "Console", UDim2.new(1, -10 * sf, 1, -6 * sf), C.LAVENDER, "rbxassetid://6031075931", function()
-        openConsole()
-        showNotif("Console", "Developer console opened", "success")
-    end)
+    local consoleContainer = cEl("Frame", ub, {
+        Size = UDim2.new(1, -10 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    consoleBtn.Parent = consoleContainer
     
-    createIconBtn(cb, "Execute", UDim2.new(0.5, -3 * sf, 1, -6 * sf), C.ACC, "rbxassetid://6026663699", executeScript)
+    local cloudExecuteBtn = cIBtn(nil, LoadedImages.EXE or "rbxassetid://6026663699", 
+        UDim2.new(0.5, -15 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 30 * sf, 0, 30 * sf), C.ACC, executeScript)
     
-    createIconBtn(cb, "Save", UDim2.new(0.5, -3 * sf, 1, -6 * sf), C.PINK, "rbxassetid://6026568198", showSave)
+    local cloudExecuteContainer = cEl("Frame", cb, {
+        Size = UDim2.new(0.5, -3 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    cloudExecuteBtn.Parent = cloudExecuteContainer
+
+    local cloudSaveBtn = cIBtn(nil, LoadedImages.SAV or "rbxassetid://6026568198", 
+        UDim2.new(0.5, -15 * sf, 0.5, -15 * sf), 
+        UDim2.new(0, 30 * sf, 0, 30 * sf), C.PINK, showSave)
+    
+    local cloudSaveContainer = cEl("Frame", cb, {
+        Size = UDim2.new(0.5, -3 * sf, 1, -6 * sf),
+        BackgroundTransparency = 1
+    })
+    cloudSaveBtn.Parent = cloudSaveContainer
     
     local editorBtn, scriptsBtn, utilsBtn, cloudBtn
     
@@ -1115,7 +1249,21 @@ local function showEd()
         })
         
         if btn:FindFirstChildOfClass("UICorner") then btn:FindFirstChildOfClass("UICorner"):Destroy() end
-        
+        local function refScr()
+for _, c in ipairs(sp:GetChildren()) do
+    if c:IsA("Frame") then c:Destroy() end
+end
+
+local scripts = {}
+for _, f in ipairs(listfiles(dir)) do
+    if f:sub(-4) == ".lua" then table.insert(scripts, f) end
+end
+
+for _, p in ipairs(scripts) do
+    createScriptItem(sp, p)
+end
+end
+
         btn.MouseButton1Click:Connect(function()
             ep.Visible = panel == ep
             sp.Visible = panel == sp
@@ -1157,13 +1305,27 @@ local function showEd()
         end
     end)
     
-    
     UIS.InputChanged:Connect(function(input)
         if isDrag and dragSt and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragSt
             mf.Position = UDim2.new(stPos.X.Scale, stPos.X.Offset + delta.X, stPos.Y.Scale, stPos.Y.Offset + delta.Y)
         end
     end)
+    
+    local function refScr()
+        for _, c in ipairs(sp:GetChildren()) do
+            if c:IsA("Frame") then c:Destroy() end
+        end
+        
+        local scripts = {}
+        for _, f in ipairs(listfiles(dir)) do
+            if f:sub(-4) == ".lua" then table.insert(scripts, f) end
+        end
+        
+        for _, p in ipairs(scripts) do
+            createScriptItem(sp, p)
+        end
+    end
     
     refScr()
     
@@ -1200,7 +1362,7 @@ local function showEd()
         showNotif("Auto Execute", "Executed " .. autoExecutedCount .. " scripts", "success")
     end
     
-    showNotif("HeatherX", "Welcome to HeatherX v2.0", "success")
+    showNotif("HeatherX", "Welcome to HeatherX", "success")
 end
 
 local function setupTBI()
@@ -1232,7 +1394,7 @@ local function setupTBI()
                     
                     local icon = clone:FindFirstChild("IntegrationIcon", true)
                     if icon and icon:IsA("ImageLabel") then
-                        icon.Image = "rbxassetid://116872248658338"
+                        icon.Image = LoadedImages.LGO or "rbxassetid://116872248658338"
                         icon.ScaleType = Enum.ScaleType.Fit
                         icon.ImageRectSize = Vector2.new(0, 0)
                         icon.ImageRectOffset = Vector2.new(0, 0)
